@@ -1,0 +1,40 @@
+[project]
+name = "voice-agent"
+version = "0.1.0"
+description = "Drive-thru LiveKit voice agent"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "livekit-agents>=1.6",
+    "livekit-plugins-anthropic>=1.6.1",
+    "livekit-plugins-assemblyai>=1.6.1",
+    "livekit-plugins-cartesia>=1.6.1",
+    "livekit-plugins-deepgram>=1.6.1",
+    "livekit-plugins-elevenlabs>=1.6.1",
+    "livekit-plugins-google>=1.6.1",
+    "livekit-plugins-openai>=1.6.1",
+    "livekit-plugins-silero>=1.5.7",
+    "livekit-plugins-turn-detector>=1.5.7",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+voice-agent = "voice_agent.agent:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voice_agent"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [".tests"]
