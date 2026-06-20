@@ -3,23 +3,18 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated
 
+import httpx
 from dotenv import load_dotenv
 from pydantic import Field
 
 from .config import AgentConfig
 from .config_loader import load_agent_config
-from .database import (
-    COMMON_INSTRUCTIONS,
-    FakeDB,
-    MenuItem,
-    find_items_by_id,
-    menu_instructions,
-)
+from .database import COMMON_INSTRUCTIONS
 from .menu_client import fetch_menu, format_menu_items
 from .models import build_llm, build_stt, build_tts, build_turn_detection, build_vad
-from .order import OrderedCombo, OrderedHappy, OrderedRegular, OrderState
+from .order import OrderedItem, OrderState
 
 from livekit.agents import (
     Agent,
@@ -27,7 +22,6 @@ from livekit.agents import (
     AgentSession,
     AudioConfig,
     BackgroundAudioPlayer,
-    FunctionTool,
     JobContext,
     RunContext,
     ToolError,
@@ -43,296 +37,90 @@ logger = logging.getLogger("drive-thru")
 @dataclass
 class Userdata:
     order: OrderState
-    drink_items: list[MenuItem]
-    combo_items: list[MenuItem]
-    happy_items: list[MenuItem]
-    regular_items: list[MenuItem]
-    sauce_items: list[MenuItem]
 
 
 class DriveThruAgent(Agent):
     def __init__(
-        self, *, userdata: Userdata, instructions_prefix: str = COMMON_INSTRUCTIONS
+        self,
+        *,
+        instructions_prefix: str = COMMON_INSTRUCTIONS,
+        userdata: Userdata | None = None,
     ) -> None:
-        instructions = (
-            instructions_prefix
-            + "\n\n"
-            + menu_instructions("drink", items=userdata.drink_items)
-            + "\n\n"
-            + menu_instructions("combo_meal", items=userdata.combo_items)
-            + "\n\n"
-            + menu_instructions("happy_meal", items=userdata.happy_items)
-            + "\n\n"
-            + menu_instructions("regular", items=userdata.regular_items)
-            + "\n\n"
-            + menu_instructions("sauce", items=userdata.sauce_items)
-        )
+        # The menu is read live via tools (get_menu_items / search_menu_items /
+        # order_item) rather than injected into the prompt. `userdata` is accepted
+        # for call-site compatibility but unused here.
+        super().__init__(instructions=instructions_prefix)
 
-        super().__init__(
-            instructions=instructions,
-            tools=[
-                self.build_regular_order_tool(
-                    userdata.regular_items, userdata.drink_items, userdata.sauce_items
-                ),
-                self.build_combo_order_tool(
-                    userdata.combo_items, userdata.drink_items, userdata.sauce_items
-                ),
-                self.build_happy_order_tool(
-                    userdata.happy_items, userdata.drink_items, userdata.sauce_items
-                ),
-            ],
-        )
-
-    def build_combo_order_tool(
-        self, combo_items: list[MenuItem], drink_items: list[MenuItem], sauce_items: list[MenuItem]
-    ) -> FunctionTool:
-        available_combo_ids = {item.id for item in combo_items}
-        available_drink_ids = {item.id for item in drink_items}
-        available_sauce_ids = {item.id for item in sauce_items}
-
-        @function_tool
-        async def order_combo_meal(
-            ctx: RunContext[Userdata],
-            meal_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the combo meal the user requested.",
-                    json_schema_extra={"enum": list(available_combo_ids)},
-                ),
-            ],
-            drink_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the drink the user requested.",
-                    json_schema_extra={"enum": list(available_drink_ids)},
-                ),
-            ],
-            drink_size: Literal["M", "L", "null"] | None,
-            fries_size: Literal["M", "L"],
-            sauce_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the sauce the user requested.",
-                    json_schema_extra={"enum": [*available_sauce_ids, "null"]},
-                ),
-            ]
-            | None,
-        ):
-            """
-            Call this when the user orders a **Combo Meal**, like: “Number 4b with a large Sprite” or “I'll do a medium meal.”
-
-            Do not call this tool unless the user clearly refers to a known combo meal by name or number.
-            Regular items like a single cheeseburger cannot be made into a meal unless such a combo explicitly exists.
-
-            Only call this function once the user has clearly specified both a drink and a sauce — always ask for them if they're missing.
-            Never infer or assume the drink — if the user has not explicitly named a drink, ask for it before calling this tool.
-
-            A meal can only be Medium or Large; Small is not an available option.
-            Drink and fries sizes can differ (e.g., “large fries but a medium Coke”).
-
-            If the user says just “a large meal,” assume both drink and fries are that size.
-            """
-            if not find_items_by_id(combo_items, meal_id):
-                raise ToolError(f"error: the meal {meal_id} was not found")
-
-            drink_sizes = find_items_by_id(drink_items, drink_id)
-            if not drink_sizes:
-                raise ToolError(f"error: the drink {drink_id} was not found")
-
-            if drink_size == "null":
-                drink_size = None
-
-            if sauce_id == "null":
-                sauce_id = None
-
-            available_sizes = list({item.size for item in drink_sizes if item.size})
-            if drink_size is None and len(available_sizes) > 1:
-                raise ToolError(
-                    f"error: {drink_id} comes with multiple sizes: {', '.join(available_sizes)}. "
-                    "Please clarify which size should be selected."
-                )
-
-            if drink_size is not None and not available_sizes:
-                raise ToolError(
-                    f"error: size should not be specified for item {drink_id} as it does not support sizing options."
-                )
-
-            available_sizes = list({item.size for item in drink_sizes if item.size})
-            if drink_size not in available_sizes:
-                drink_size = None
-                # raise ToolError(
-                #     f"error: unknown size {drink_size} for {drink_id}. Available sizes: {', '.join(available_sizes)}."
-                # )
-
-            if sauce_id and not find_items_by_id(sauce_items, sauce_id):
-                raise ToolError(f"error: the sauce {sauce_id} was not found")
-
-            item = OrderedCombo(
-                meal_id=meal_id,
-                drink_id=drink_id,
-                drink_size=drink_size,
-                sauce_id=sauce_id,
-                fries_size=fries_size,
-            )
-            await ctx.userdata.order.add(item)
-            return f"The item was added: {item.model_dump_json()}"
-
-        return order_combo_meal
-
-    def build_happy_order_tool(
+    @function_tool
+    async def order_item(
         self,
-        happy_items: list[MenuItem],
-        drink_items: list[MenuItem],
-        sauce_items: list[MenuItem],
-    ) -> FunctionTool:
-        available_happy_ids = {item.id for item in happy_items}
-        available_drink_ids = {item.id for item in drink_items}
-        available_sauce_ids = {item.id for item in sauce_items}
+        ctx: RunContext[Userdata],
+        item_id: Annotated[
+            str,
+            Field(
+                description="The exact `item_id` from `search_menu_items`. "
+                "Always look it up first — do not guess."
+            ),
+        ],
+        size: Annotated[
+            str | None,
+            Field(
+                description="Size label (e.g. 'S', 'M', 'L') — only for items that have sizes."
+            ),
+        ] = None,
+        quantity: Annotated[int, Field(description="How many to add.", ge=1)] = 1,
+    ) -> str:
+        """
+        Add an item to the customer's order.
 
-        @function_tool
-        async def order_happy_meal(
-            ctx: RunContext[Userdata],
-            meal_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the happy meal the user requested.",
-                    json_schema_extra={"enum": list(available_happy_ids)},
-                ),
-            ],
-            drink_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the drink the user requested.",
-                    json_schema_extra={"enum": list(available_drink_ids)},
-                ),
-            ],
-            drink_size: Literal["S", "M", "L", "null"] | None,
-            sauce_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the sauce the user requested.",
-                    json_schema_extra={"enum": [*available_sauce_ids, "null"]},
-                ),
-            ]
-            | None,
-        ) -> str:
-            """
-            Call this when the user orders a **Happy Meal**, typically for children. These meals come with a main item, a drink, and a sauce.
+        Call `search_menu_items` first to get the correct `item_id` and confirm
+        availability. Only pass `size` when the item actually has size options.
+        """
+        try:
+            items = await fetch_menu()
+        except Exception as e:
+            raise ToolError(f"error: could not load the menu: {e}")
 
-            The user must clearly specify a valid Happy Meal option (e.g., “Can I get a Happy Meal?”).
-
-            Before calling this tool:
-            - Ensure the user has provided all required components: a valid meal, drink, drink size, and sauce.
-            - If any of these are missing, prompt the user for the missing part before proceeding.
-
-            Assume Small as default only if the user says "Happy Meal" and gives no size preference, but always ask for clarification if unsure.
-            """
-            if not find_items_by_id(happy_items, meal_id):
-                raise ToolError(f"error: the meal {meal_id} was not found")
-
-            drink_sizes = find_items_by_id(drink_items, drink_id)
-            if not drink_sizes:
-                raise ToolError(f"error: the drink {drink_id} was not found")
-
-            if drink_size == "null":
-                drink_size = None
-
-            if sauce_id == "null":
-                sauce_id = None
-
-            available_sizes = list({item.size for item in drink_sizes if item.size})
-            if drink_size is None and len(available_sizes) > 1:
-                raise ToolError(
-                    f"error: {drink_id} comes with multiple sizes: {', '.join(available_sizes)}. "
-                    "Please clarify which size should be selected."
-                )
-
-            if drink_size is not None and not available_sizes:
-                drink_size = None
-
-            if sauce_id and not find_items_by_id(sauce_items, sauce_id):
-                raise ToolError(f"error: the sauce {sauce_id} was not found")
-
-            item = OrderedHappy(
-                meal_id=meal_id,
-                drink_id=drink_id,
-                drink_size=drink_size,
-                sauce_id=sauce_id,
+        item = next((i for i in items if i["id"] == item_id), None)
+        if item is None:
+            raise ToolError(
+                f"error: '{item_id}' is not on the menu. Use search_menu_items to find the correct id."
             )
-            await ctx.userdata.order.add(item)
-            return f"The item was added: {item.model_dump_json()}"
+        if not item.get("available", True):
+            raise ToolError(f"error: {item['name']} is currently unavailable.")
 
-        return order_happy_meal
-
-    def build_regular_order_tool(
-        self,
-        regular_items: list[MenuItem],
-        drink_items: list[MenuItem],
-        sauce_items: list[MenuItem],
-    ) -> FunctionTool:
-        all_items = regular_items + drink_items + sauce_items
-        available_ids = {item.id for item in all_items}
-
-        @function_tool
-        async def order_regular_item(
-            ctx: RunContext[Userdata],
-            item_id: Annotated[
-                str,
-                Field(
-                    description="The ID of the item the user requested.",
-                    json_schema_extra={"enum": list(available_ids)},
-                ),
-            ],
-            size: Annotated[
-                # models don't seem to understand `ItemSize | None`, adding the `null` inside the enum list as a workaround
-                Literal["S", "M", "L", "null"] | None,
-                Field(
-                    description="Size of the item, if applicable (e.g., 'S', 'M', 'L'), otherwise 'null'. "
-                ),
-            ] = "null",
-        ) -> str:
-            """
-            Call this when the user orders **a single item on its own**, not as part of a Combo Meal or Happy Meal.
-
-            The customer must provide clear and specific input. For example, item variants such as flavor must **always** be explicitly stated.
-            Never call this tool when size information is still needed — if the item has multiple sizes and the user has not specified one, ask for the size before calling.
-
-            The user might say—for example:
-            - “Just the cheeseburger, no meal”
-            - “A medium Coke”
-            - “Can I get some ketchup?”
-            - “Can I get a McFlurry Oreo?”
-            """
-            item_sizes = find_items_by_id(all_items, item_id)
-            if not item_sizes:
-                raise ToolError(f"error: {item_id} was not found.")
-
-            if size == "null":
-                size = None
-
-            available_sizes = list({item.size for item in item_sizes if item.size})
-            if size is None and len(available_sizes) > 1:
+        sizes = item.get("sizes") or []
+        chosen_size: str | None = None
+        if sizes:
+            valid = sorted({s["size"] for s in sizes})
+            if size is None:
                 raise ToolError(
-                    f"error: {item_id} comes with multiple sizes: {', '.join(available_sizes)}. "
-                    "Please clarify which size should be selected."
+                    f"error: {item['name']} comes in sizes: {', '.join(valid)}. "
+                    "Ask the customer which size."
                 )
-
-            if size is not None and not available_sizes:
-                size = None
-                # raise ToolError(
-                #     f"error: size should not be specified for item {item_id} as it does not support sizing options."
-                # )
-
-            if (size and available_sizes) and size not in available_sizes:
+            if size not in valid:
                 raise ToolError(
-                    f"error: unknown size {size} for {item_id}. Available sizes: {', '.join(available_sizes)}."
+                    f"error: size {size!r} isn't available for {item['name']}. Options: {', '.join(valid)}."
                 )
+            chosen_size = size
+            unit_price = next(s["price"] for s in sizes if s["size"] == size)
+        else:
+            unit_price = item.get("price") or 0.0
 
-            item = OrderedRegular(item_id=item_id, size=size)
-            await ctx.userdata.order.add(item)
-            return f"The item was added: {item.model_dump_json()}"
+        qty = max(1, int(quantity))
+        ordered = OrderedItem(
+            item_id=item_id,
+            name=item["name"],
+            size=chosen_size,
+            quantity=qty,
+            unit_price=float(unit_price),
+            currency=item.get("currency") or "USD",
+            image_url=item.get("image_url"),
+        )
+        await ctx.userdata.order.add(ordered)
+        label = item["name"] + (f" ({chosen_size})" if chosen_size else "")
+        return f"Added {qty} x {label} to the order: {ordered.model_dump_json()}"
 
-        return order_regular_item
 
     @function_tool
     async def remove_order_item(
@@ -410,93 +198,63 @@ class DriveThruAgent(Agent):
             return f"No menu items found{scope}."
         return format_menu_items(items)
 
+    @function_tool
+    async def search_menu_items(
+        self,
+        ctx: RunContext[Userdata],
+        query: Annotated[
+            str,
+            Field(description="A search term to match against item names (case-insensitive). "
+                  "E.g. 'burger', 'coke', 'chicken'."),
+        ],
+    ) -> str:
+        """
+        Search the menu by name to find items matching the given query.
 
-def _find(items: list[MenuItem], id: str, size=None) -> MenuItem | None:
-    found = find_items_by_id(items, id, size)
-    return found[0] if found else None
+        Use this BEFORE calling `order_item` to get the exact `item_id` and
+        confirm availability. If the search returns nothing, the item is not on
+        the menu — tell the customer. Do NOT guess item IDs.
+        """
+        try:
+            items = await fetch_menu()
+        except Exception as e:
+            raise ToolError(f"error: could not load the menu: {e}")
+
+        q = query.lower()
+        matches = [i for i in items if q in i["name"].lower()]
+        if not matches:
+            return f"No menu items match '{query}'."
+        return "Matching items:\n" + format_menu_items(matches, include_id=True)
 
 
 def build_cart(userdata: Userdata) -> dict:
     """Build a structured cart payload for the customer frontend.
 
-    Identical lines (same name + details) are aggregated into a single entry
-    with a quantity. Shape:
-        {"currency", "items": [{name, details, quantity, unit_price,
-                                line_total, image_url}], "total"}
-    `image_url` is null until the agent is wired to the server-managed menu.
+    Shape: {"currency", "items": [{name, details, quantity, unit_price,
+            line_total, image_url}], "total"}.
     """
-    # Preserve insertion order while aggregating duplicates by (name, details).
-    aggregated: dict[tuple[str, str], dict] = {}
-    for item in userdata.order.items.values():
-        if isinstance(item, OrderedCombo):
-            meal = _find(userdata.combo_items, item.meal_id)
-            drink = _find(userdata.drink_items, item.drink_id, item.drink_size)
-            extras = [f"fries {item.fries_size}"]
-            if drink:
-                extras.append(f"{drink.name} ({item.drink_size})")
-            if item.sauce_id:
-                sauce = _find(userdata.sauce_items, item.sauce_id)
-                if sauce:
-                    extras.append(sauce.name)
-            name = meal.name if meal else item.meal_id
-            price = meal.price if meal else 0.0
-        elif isinstance(item, OrderedHappy):
-            meal = _find(userdata.happy_items, item.meal_id)
-            drink = _find(userdata.drink_items, item.drink_id, item.drink_size)
-            extras = []
-            if drink:
-                extras.append(f"{drink.name} ({item.drink_size})")
-            if item.sauce_id:
-                sauce = _find(userdata.sauce_items, item.sauce_id)
-                if sauce:
-                    extras.append(sauce.name)
-            name = meal.name if meal else item.meal_id
-            price = meal.price if meal else 0.0
-        else:
-            assert isinstance(item, OrderedRegular)
-            reg = _find(userdata.regular_items, item.item_id, item.size)
-            name = reg.name if reg else item.item_id
-            price = reg.price if reg else 0.0
-            extras = [f"size {item.size}"] if item.size else []
-
-        details = ", ".join(extras)
-        key = (name, details)
-        if key in aggregated:
-            entry = aggregated[key]
-            entry["quantity"] += 1
-            entry["line_total"] = round(entry["unit_price"] * entry["quantity"], 2)
-        else:
-            aggregated[key] = {
-                "name": name,
-                "details": details or None,
-                "quantity": 1,
-                "unit_price": round(price, 2),
-                "line_total": round(price, 2),
-                "image_url": None,
+    items: list[dict] = []
+    currency = "USD"
+    for o in userdata.order.items.values():
+        currency = o.currency or currency
+        line_total = round(o.unit_price * o.quantity, 2)
+        items.append(
+            {
+                "name": o.name,
+                "details": f"Size {o.size}" if o.size else None,
+                "quantity": o.quantity,
+                "unit_price": round(o.unit_price, 2),
+                "line_total": line_total,
+                "image_url": o.image_url,
             }
+        )
 
-    items = list(aggregated.values())
-    total = round(sum(e["line_total"] for e in items), 2)
-    return {"currency": "USD", "items": items, "total": total}
+    total = round(sum(i["line_total"] for i in items), 2)
+    return {"currency": currency, "items": items, "total": total}
 
 
 async def new_userdata() -> Userdata:
-    fake_db = FakeDB()
-    drink_items = await fake_db.list_drinks()
-    combo_items = await fake_db.list_combo_meals()
-    happy_items = await fake_db.list_happy_meals()
-    regular_items = await fake_db.list_regulars()
-    sauce_items = await fake_db.list_sauces()
-
-    order_state = OrderState(items={})
-    userdata = Userdata(
-        order=order_state,
-        drink_items=drink_items,
-        combo_items=combo_items,
-        happy_items=happy_items,
-        regular_items=regular_items,
-        sauce_items=sauce_items,
-    )
+    userdata = Userdata(order=OrderState(items={}))
     return userdata
 
 
@@ -521,6 +279,24 @@ server = AgentServer()
 async def on_session_end(ctx: JobContext) -> None:
     report = ctx.make_session_report()
     _ = json.dumps(report.to_dict(), indent=2)
+
+    room_name = ctx.room.name
+    server_url = os.getenv("SERVER_URL", "").rstrip("/")
+    api_key = os.getenv("AGENT_API_KEY")
+    if not api_key:
+        logger.warning("AGENT_API_KEY not set; cannot mark session %s as completed", room_name)
+    if server_url and api_key:
+        try:
+            url = f"{server_url}/api/v1/sessions/by-room/{room_name}/complete"
+            async with httpx.AsyncClient() as client:
+                resp = await client.patch(url, headers={"Authorization": f"Bearer {api_key}"})
+                if resp.status_code != 200:
+                    logger.warning(
+                        "mark session %s completed returned %s: %s",
+                        room_name, resp.status_code, resp.text,
+                    )
+        except Exception:
+            logger.exception("failed to mark session %s as completed", room_name)
 
 
 @server.rtc_session(on_session_end=on_session_end)

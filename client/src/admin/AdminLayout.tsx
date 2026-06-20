@@ -11,6 +11,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconBuildingStore,
+  IconHeadphones,
   IconFileUpload,
   IconLayoutDashboard,
   IconLogout,
@@ -27,6 +28,7 @@ import { useAuth } from '../components/auth/AuthContext';
 const ALL_NAV = [
   { to: '/admin', label: 'Dashboard', icon: IconLayoutDashboard, end: true, roles: ['admin', 'manager', 'staff'] },
   { to: '/admin/menu', label: 'Menu', icon: IconToolsKitchen2, roles: ['admin', 'manager', 'staff'] },
+  { to: '/admin/listen', label: 'Listen in', icon: IconHeadphones, roles: ['admin', 'manager', 'staff'] },
   { to: '/admin/documents', label: 'Documents', icon: IconFileUpload, roles: ['admin', 'manager'] },
   { to: '/admin/agent-configs', label: 'Agent configs', icon: IconRobot, roles: ['admin', 'manager'] },
   { to: '/admin/parser-config', label: 'Parser config', icon: IconSettings, roles: ['admin'] },

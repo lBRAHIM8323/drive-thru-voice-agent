@@ -19,8 +19,13 @@ async def fetch_menu(category: str | None = None) -> list[dict[str, Any]]:
 
     url = base.rstrip("/") + MENU_PATH
     params = {"category": category} if category else None
+    headers = {}
+    api_key = os.getenv("AGENT_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.get(url, params=params)
+        resp = await client.get(url, params=params, headers=headers)
         resp.raise_for_status()
         return resp.json()
 
@@ -34,11 +39,15 @@ def _price_label(item: dict[str, Any]) -> str:
     return f"{currency} {price:.2f}" if price is not None else "price n/a"
 
 
-def format_menu_items(items: list[dict[str, Any]]) -> str:
-    """Render menu items as a compact, voice-friendly list for the LLM."""
+def format_menu_items(items: list[dict[str, Any]], *, include_id: bool = False) -> str:
+    """Render menu items as a compact, voice-friendly list for the LLM.
+
+    Pass ``include_id=True`` when the LLM needs the exact ``item_id`` to order.
+    """
     lines: list[str] = []
     for item in items:
-        line = f"- {item['name']} ({item.get('category', 'item')}): {_price_label(item)}"
+        ident = f" [id: {item['id']}]" if include_id else ""
+        line = f"- {item['name']}{ident} ({item.get('category', 'item')}): {_price_label(item)}"
         if item.get("calories") is not None:
             line += f", {item['calories']} Cal"
         if item.get("description"):

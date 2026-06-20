@@ -12,6 +12,7 @@ import { AgentConfigsPage } from './admin/pages/AgentConfigsPage';
 import { AgentConfigEditPage } from './admin/pages/AgentConfigEditPage';
 import { ParserConfigPage } from './admin/pages/ParserConfigPage';
 import { BranchesPage } from './admin/pages/BranchesPage';
+import { ListenInPage } from './admin/pages/ListenInPage';
 import { UsersPage } from './admin/pages/UsersPage';
 
 export function App() {
@@ -30,6 +31,7 @@ export function App() {
             <Route path="agent-configs/new" element={<AgentConfigEditPage />} />
             <Route path="agent-configs/:id" element={<AgentConfigEditPage />} />
             <Route path="parser-config" element={<ParserConfigPage />} />
+            <Route path="listen" element={<ListenInPage />} />
             <Route path="branches" element={<BranchesPage />} />
             <Route path="users" element={<UsersPage />} />
           </Route>

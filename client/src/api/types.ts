@@ -259,3 +259,45 @@ export interface CartPayload {
   items: CartItem[];
   total: number;
 }
+
+// --- sessions & orders -----------------------------------------------------
+
+export interface OrderItemRead {
+  id: UUID;
+  order_id: UUID;
+  menu_item_id: string | null;
+  name_snapshot: string;
+  size: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  notes: Record<string, unknown> | null;
+}
+
+export interface OrderRead {
+  id: UUID;
+  session_id: UUID | null;
+  branch_id: UUID | null;
+  status: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  currency: string;
+  placed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  items: OrderItemRead[];
+}
+
+export interface SessionRead {
+  id: UUID;
+  branch_id: UUID | null;
+  agent_config_id: string | null;
+  room_name: string | null;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  audio_url: string | null;
+  transcript: Record<string, unknown> | null;
+  orders: OrderRead[];
+}

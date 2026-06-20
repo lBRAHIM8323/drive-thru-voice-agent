@@ -12,7 +12,7 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
 
 import { useBranches, useCreateUser, useDeleteUser, useUpdateUser, useUsers } from '../../api/hooks';
 import { PageHeader } from '../../components/PageHeader';
@@ -98,7 +98,14 @@ export function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Users" onAdd={openCreate} addLabel="Add user" />
+      <PageHeader
+        title="Users"
+        actions={
+          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
+            Add user
+          </Button>
+        }
+      />
 
       <Table striped highlightOnHover>
         <Table.Thead>

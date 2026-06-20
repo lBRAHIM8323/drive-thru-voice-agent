@@ -18,6 +18,7 @@ import type {
   MenuItemUpdate,
   ParserConfig,
   ParserConfigUpdate,
+  SessionRead,
   TokenResponse,
   UUID,
   User,
@@ -275,6 +276,21 @@ export function useUpdateParserConfig() {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.parserConfig }),
   });
 }
+
+// --- sessions (listen-in) --------------------------------------------------
+
+export const useSessions = () =>
+  useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => api.get<SessionRead[]>('/sessions'),
+  });
+
+export const useSession = (id: UUID | undefined) =>
+  useQuery({
+    queryKey: ['sessions', id],
+    queryFn: () => api.get<SessionRead>(`/sessions/${id}`),
+    enabled: !!id,
+  });
 
 // --- connection (customer page) -------------------------------------------
 

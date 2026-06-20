@@ -51,7 +51,6 @@ def list_menu(
     category: ItemCategory | None = Query(default=None),
     session: Session = Depends(get_session),
     user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
-    _user: User = Depends(get_current_user),
 ) -> list[MenuItemRead]:
     stmt = select(MenuItem)
     if category:

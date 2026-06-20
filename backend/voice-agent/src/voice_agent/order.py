@@ -5,7 +5,6 @@ import secrets
 import string
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,41 +16,30 @@ def order_uid() -> str:
     return "O_" + "".join(secrets.choice(alphabet) for _ in range(6))
 
 
-class OrderedCombo(BaseModel):
-    type: Literal["combo_meal"] = "combo_meal"
-    order_id: str = Field(default_factory=order_uid)
-    meal_id: str
-    drink_id: str
-    drink_size: Literal["M", "L"] | None
-    fries_size: Literal["M", "L"]
-    sauce_id: str | None
+class OrderedItem(BaseModel):
+    """A single line in the order, snapshotting the menu item at order time.
 
+    Name/price/size are stored on the item itself so the cart never needs to
+    re-query the menu (and historical prices are preserved even if the menu
+    changes).
+    """
 
-class OrderedHappy(BaseModel):
-    type: Literal["happy_meal"] = "happy_meal"
-    order_id: str = Field(default_factory=order_uid)
-    meal_id: str
-    drink_id: str
-    drink_size: Literal["S", "M", "L"] | None
-    sauce_id: str | None
-
-
-class OrderedRegular(BaseModel):
-    type: Literal["regular"] = "regular"
     order_id: str = Field(default_factory=order_uid)
     item_id: str
-    size: Literal["S", "M", "L"] | None = None
-
-
-OrderedItem = Annotated[OrderedCombo | OrderedHappy | OrderedRegular, Field(discriminator="type")]
+    name: str
+    size: str | None = None
+    quantity: int = 1
+    unit_price: float = 0.0
+    currency: str = "USD"
+    image_url: str | None = None
 
 
 @dataclass
 class OrderState:
     items: dict[str, OrderedItem]
-    # Optional async hook fired after every add/remove. The agent
-    # wires this up to push the current cart to the playground UI;
-    # exceptions inside the hook never block the order mutation.
+    # Optional async hook fired after every add/remove. The agent wires this up
+    # to push the current cart to the frontend; exceptions inside the hook never
+    # block the order mutation.
     on_change: Callable[[], Awaitable[None]] | None = field(default=None)
 
     async def _fire(self) -> None:
@@ -72,4 +60,4 @@ class OrderState:
         return removed
 
     def get(self, order_id: str) -> OrderedItem | None:
-        return self.items[order_id]
+        return self.items.get(order_id)

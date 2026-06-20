@@ -45,6 +45,9 @@ class Settings:
         self.admin_username: str | None = os.getenv("ADMIN_USERNAME")
         self.admin_password: str | None = os.getenv("ADMIN_PASSWORD")
 
+        # Shared secret the voice-agent uses to authenticate with this API.
+        self.agent_api_key: str | None = os.getenv("AGENT_API_KEY")
+
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith("postgresql")

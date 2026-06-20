@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import AgentConfigRecord
+from ..models import AgentConfigRecord, Session as SessionRecord
 from ..schemas.agent_config import UIConfig
 from ..settings import get_settings
 
@@ -97,6 +97,14 @@ async def create_connection(
         )
         .to_jwt()
     )
+
+    db_session_obj = SessionRecord(
+        branch_id=rec.branch_id,
+        agent_config_id=rec.id,
+        room_name=room_name,
+    )
+    session.add(db_session_obj)
+    session.commit()
 
     return ConnectionInfo(
         server_url=_client_ws_url(settings.livekit_url),

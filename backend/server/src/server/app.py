@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import agent_configs, auth, branches, connection, documents, menu, parser_config, users
+from .routers import agent_configs, auth, branches, connection, documents, menu, parser_config, sessions, users
 from .settings import get_settings
 
 API_PREFIX = "/api/v1"
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix=API_PREFIX)
     app.include_router(agent_configs.router, prefix=API_PREFIX)
     app.include_router(parser_config.router, prefix=API_PREFIX)
+    app.include_router(sessions.router, prefix=API_PREFIX)
     app.include_router(connection.router, prefix=API_PREFIX)
     return app
 
