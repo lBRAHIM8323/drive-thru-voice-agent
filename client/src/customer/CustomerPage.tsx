@@ -13,6 +13,7 @@ import type { ConnectionInfo, UIConfig } from '../api/types';
 import { notifyError } from '../lib/notify';
 import { AgentVisualizer } from './Visualizers';
 import { CartPanel } from './CartPanel';
+import { MenuPanel } from './MenuPanel';
 
 const STATE_LABEL: Partial<Record<AgentState, string>> = {
   disconnected: 'Disconnected',
@@ -71,6 +72,14 @@ function SessionView({ ui }: { ui: UIConfig }) {
 
   return (
     <Flex h="100vh">
+      <Paper
+        w={320}
+        radius={0}
+        style={{ borderRight: '1px solid var(--mantine-color-default-border)' }}
+      >
+        <MenuPanel />
+      </Paper>
+
       <Stack flex={1} p="xl" justify="space-between" align="stretch" mih={0}>
         <Title order={3} ta="center">
           {ui.title ?? 'Welcome — how can I help?'}

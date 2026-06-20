@@ -243,6 +243,13 @@ export interface UserCreate {
 
 export type UserUpdate = Partial<Omit<UserCreate, 'username'>>;
 
+// --- menu (pushed from the agent over RPC `set_menu_content`) ---------------
+
+export interface MenuPayload {
+  currency: string;
+  items: MenuItem[];
+}
+
 // --- cart (pushed from the agent over RPC `set_cart_content`) --------------
 
 export interface CartItem {

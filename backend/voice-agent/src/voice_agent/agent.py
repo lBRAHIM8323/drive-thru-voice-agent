@@ -334,15 +334,15 @@ async def drive_thru_agent(ctx: JobContext) -> None:
     push_pending = False
     push_running = False
 
-    async def _push_to(identity: str, payload: str) -> None:
+    async def _push_to(identity: str, method: str, payload: str) -> None:
         try:
             await ctx.room.local_participant.perform_rpc(
                 destination_identity=identity,
-                method="set_cart_content",
+                method=method,
                 payload=payload,
             )
         except Exception:
-            logger.exception("cart push to %s failed", identity)
+            logger.exception("%s push to %s failed", method, identity)
 
     async def _push_runner() -> None:
         nonlocal push_pending, push_running
@@ -356,7 +356,7 @@ async def drive_thru_agent(ctx: JobContext) -> None:
                 if not peers:
                     continue
                 await asyncio.gather(
-                    *(_push_to(p.identity, payload) for p in peers),
+                    *(_push_to(p.identity, "set_cart_content", payload) for p in peers),
                     return_exceptions=True,
                 )
         finally:
@@ -375,6 +375,19 @@ async def drive_thru_agent(ctx: JobContext) -> None:
         agent=DriveThruAgent(userdata=userdata, instructions_prefix=config.instructions),
         room=ctx.room,
     )
+
+    # Push the full menu to the UI once at session start
+    try:
+        menu_items = await fetch_menu()
+        menu_payload = json.dumps({"currency": "USD", "items": menu_items})
+        peers = list(ctx.room.remote_participants.values())
+        if peers:
+            await asyncio.gather(
+                *(_push_to(p.identity, "set_menu_content", menu_payload) for p in peers),
+                return_exceptions=True,
+            )
+    except Exception:
+        logger.exception("menu push failed")
 
     if config.background_audio.enabled:
         background_audio = BackgroundAudioPlayer(
