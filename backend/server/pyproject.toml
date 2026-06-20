@@ -16,6 +16,7 @@ dependencies = [
     "pypdf>=5.0.0",
     "psycopg[binary]>=3.2",
     "bcrypt>=4.1",
+    "pyjwt>=2.8",
     "livekit-api>=1.0",
 ]
 

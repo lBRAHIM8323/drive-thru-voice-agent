@@ -3,6 +3,25 @@
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
 
+const TOKEN_KEY = 'drivethru_token';
+let _onUnauthorized: (() => void) | null = null;
+
+export function onUnauthorized(cb: () => void) {
+  _onUnauthorized = cb;
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -37,10 +56,20 @@ async function parseBody(res: Response): Promise<unknown> {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
+  const headers = { ...init?.headers, ...authHeaders() } as Record<string, string>;
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const body = await parseBody(res);
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      _onUnauthorized?.();
+    }
     const detail = (body as { detail?: unknown })?.detail ?? body;
     throw new ApiError(res.status, detail, detailToMessage(detail, res.statusText));
   }
@@ -55,21 +84,21 @@ export const api = {
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'POST',
-      headers: body === undefined ? undefined : jsonHeaders,
+      headers: body === undefined ? undefined : { ...jsonHeaders, ...authHeaders() },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
 
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'PUT',
-      headers: jsonHeaders,
+      headers: { ...jsonHeaders, ...authHeaders() },
       body: JSON.stringify(body),
     }),
 
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'PATCH',
-      headers: jsonHeaders,
+      headers: { ...jsonHeaders, ...authHeaders() },
       body: JSON.stringify(body),
     }),
 

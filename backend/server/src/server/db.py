@@ -62,6 +62,30 @@ engine = create_engine(
 )
 
 
+def _migrate(session: Session) -> None:
+    """Idempotent schema migrations for existing databases (Postgres).
+    ``SQLModel.metadata.create_all`` only creates *new* tables; it does not
+    add columns to existing tables, so we run minimal ALTER TABLE statements
+    here for each release that adds a column.
+    """
+    if not _settings.is_postgres:
+        return
+    import sqlalchemy as sa
+
+    conn = session.connection()
+    inspector = sa.inspect(conn)
+
+    # v0.2.0 — add ``branch_id`` to the ``users`` table.
+    cols = {c["name"] for c in inspector.get_columns("users")}
+    if "branch_id" not in cols:
+        conn.execute(
+            sa.text(
+                "ALTER TABLE users ADD COLUMN branch_id UUID REFERENCES branches(id)"
+            )
+        )
+        logger.info("migrated users: added branch_id column")
+
+
 def _seed(session: Session) -> None:
     # Singleton parser config.
     if session.exec(select(ParserConfigRecord)).first() is None:
@@ -94,6 +118,7 @@ def init_db() -> None:
     _ensure_database_exists(_settings.database_url)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
+        _migrate(session)
         _seed(session)
 
 

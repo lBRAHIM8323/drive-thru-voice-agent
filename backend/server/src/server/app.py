@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import agent_configs, branches, connection, documents, menu, parser_config
+from .routers import agent_configs, auth, branches, connection, documents, menu, parser_config, users
 from .settings import get_settings
 
 API_PREFIX = "/api/v1"
@@ -36,6 +36,8 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(auth.router, prefix=API_PREFIX)
+    app.include_router(users.router, prefix=API_PREFIX)
     app.include_router(branches.router, prefix=API_PREFIX)
     app.include_router(menu.router, prefix=API_PREFIX)
     app.include_router(documents.router, prefix=API_PREFIX)

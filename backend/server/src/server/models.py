@@ -58,7 +58,10 @@ class User(SQLModel, table=True):
     username: str = Field(unique=True, index=True)
     email: str | None = Field(default=None, unique=True, index=True)
     hashed_password: str
-    role: str = "admin"  # admin | manager | staff
+    role: str = "admin"
+    branch_id: uuid.UUID | None = Field(
+        default=None, foreign_key="branches.id", index=True
+    )
     is_active: bool = True
     last_login_at: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)

@@ -36,6 +36,11 @@ class Settings:
         self.host: str = os.getenv("HOST", "0.0.0.0")
         self.port: int = int(os.getenv("PORT", "8000"))
 
+        # JWT
+        self.jwt_secret: str = os.getenv("JWT_SECRET", "CHANGE-ME-IN-PRODUCTION-abcdef1234567890")
+        self.jwt_algorithm: str = "HS256"
+        self.jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+
         # Optional bootstrap admin, seeded on init if both are set.
         self.admin_username: str | None = os.getenv("ADMIN_USERNAME")
         self.admin_password: str | None = os.getenv("ADMIN_PASSWORD")

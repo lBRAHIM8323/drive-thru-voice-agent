@@ -12,13 +12,71 @@ import type {
   ConfirmMode,
   ConnectionInfo,
   DocumentRead,
+  LoginRequest,
   MenuItem,
   MenuItemCreate,
   MenuItemUpdate,
   ParserConfig,
   ParserConfigUpdate,
+  TokenResponse,
   UUID,
+  User,
+  UserCreate,
+  UserUpdate,
 } from './types';
+
+// --- auth ------------------------------------------------------------------
+
+export function useLogin() {
+  return useMutation({
+    mutationFn: (body: LoginRequest) => api.post<TokenResponse>('/auth/login', body),
+  });
+}
+
+export function useMe() {
+  return useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => api.get<User>('/auth/me'),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+// --- users (admin only) ----------------------------------------------------
+
+export function useUsers() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get<User[]>('/users'),
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UserCreate) => api.post<User>('/users', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: UUID; body: UserUpdate }) =>
+      api.patch<User>(`/users/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: UUID) => api.del<void>(`/users/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+// --- query keys ------------------------------------------------------------
 
 export const qk = {
   branches: ['branches'] as const,

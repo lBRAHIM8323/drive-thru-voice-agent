@@ -1,27 +1,45 @@
-import { AppShell, Burger, Group, NavLink, ScrollArea, Text } from '@mantine/core';
+import {
+  AppShell,
+  Burger,
+  Button,
+  Group,
+  Menu,
+  NavLink,
+  ScrollArea,
+  Text,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconBuildingStore,
   IconFileUpload,
   IconLayoutDashboard,
+  IconLogout,
   IconRobot,
   IconSettings,
   IconToolsKitchen2,
+  IconUsers,
+  IconUserCircle,
 } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router-dom';
 
-const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: IconLayoutDashboard, end: true },
-  { to: '/admin/menu', label: 'Menu', icon: IconToolsKitchen2 },
-  { to: '/admin/documents', label: 'Documents', icon: IconFileUpload },
-  { to: '/admin/agent-configs', label: 'Agent configs', icon: IconRobot },
-  { to: '/admin/parser-config', label: 'Parser config', icon: IconSettings },
-  { to: '/admin/branches', label: 'Branches', icon: IconBuildingStore },
+import { useAuth } from '../components/auth/AuthContext';
+
+const ALL_NAV = [
+  { to: '/admin', label: 'Dashboard', icon: IconLayoutDashboard, end: true, roles: ['admin', 'manager', 'staff'] },
+  { to: '/admin/menu', label: 'Menu', icon: IconToolsKitchen2, roles: ['admin', 'manager', 'staff'] },
+  { to: '/admin/documents', label: 'Documents', icon: IconFileUpload, roles: ['admin', 'manager'] },
+  { to: '/admin/agent-configs', label: 'Agent configs', icon: IconRobot, roles: ['admin', 'manager'] },
+  { to: '/admin/parser-config', label: 'Parser config', icon: IconSettings, roles: ['admin'] },
+  { to: '/admin/branches', label: 'Branches', icon: IconBuildingStore, roles: ['admin'] },
+  { to: '/admin/users', label: 'Users', icon: IconUsers, roles: ['admin'] },
 ];
 
 export function AdminLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const { pathname } = useLocation();
+  const { user, logout } = useAuth();
+
+  const navItems = ALL_NAV.filter((item) => item.roles.includes(user?.role ?? 'staff'));
 
   return (
     <AppShell
@@ -30,17 +48,43 @@ export function AdminLayout() {
       padding="md"
     >
       <AppShell.Header>
-        <Group h="100%" px="md" gap="sm">
-          <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-          <Text fw={700} size="lg">
-            🍔 Drive-Thru Admin
-          </Text>
+        <Group h="100%" px="md" gap="sm" justify="space-between">
+          <Group gap="sm">
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+            <Text fw={700} size="lg">
+              Drive-Thru Admin
+            </Text>
+          </Group>
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+              <Button
+                variant="subtle"
+                leftSection={<IconUserCircle size={18} />}
+                size="sm"
+              >
+                {user?.username ?? 'User'}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item disabled>
+                {user?.role} · {user?.email ?? 'no email'}
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item
+                color="red"
+                leftSection={<IconLogout size={16} />}
+                onClick={logout}
+              >
+                Sign out
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </AppShell.Header>
 
       <AppShell.Navbar p="sm">
         <ScrollArea>
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const active = item.end ? pathname === item.to : pathname.startsWith(item.to);
             return (
               <NavLink

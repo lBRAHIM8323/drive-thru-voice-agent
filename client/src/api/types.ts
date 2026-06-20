@@ -206,6 +206,43 @@ export interface ConnectionInfo {
   ui: UIConfig;
 }
 
+// --- auth ------------------------------------------------------------------
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export type UserRole = 'admin' | 'manager' | 'staff';
+
+export interface User {
+  id: UUID;
+  username: string;
+  email: string | null;
+  role: UserRole;
+  branch_id: UUID | null;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface UserCreate {
+  username: string;
+  password: string;
+  email?: string | null;
+  role?: UserRole;
+  branch_id?: UUID | null;
+  is_active?: boolean;
+}
+
+export type UserUpdate = Partial<Omit<UserCreate, 'username'>>;
+
 // --- cart (pushed from the agent over RPC `set_cart_content`) --------------
 
 export interface CartItem {

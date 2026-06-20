@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlmodel import Session, delete, select
 
 from ..db import get_session
-from ..models import Document, MenuItem, MenuItemSize, ParserConfigRecord
+from ..deps import get_current_user, require_branch_resource
+from ..models import Document, MenuItem, MenuItemSize, ParserConfigRecord, User
 from ..parsing.extract import UnsupportedFormat, extract
 from ..parsing.parser import parse_menu
 from ..parsing.providers import MissingProviderKey, ParserError
@@ -53,6 +54,8 @@ async def upload_and_parse(
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
     session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
 ) -> DocumentRead:
     """Parse an uploaded menu (file) or pasted `text` into a pending document."""
     # A real file upload takes precedence over the `text` field; `text` is only
@@ -78,12 +81,16 @@ async def upload_and_parse(
     else:
         provider, model = parser_config.provider, parser_config.model
 
+    if user.role not in ("admin", "manager"):
+        raise HTTPException(403, "Only admin and manager can upload documents")
+
     doc = Document(
         filename=file.filename if file else None,
         content_type=(file.content_type if file else "text/plain"),
         size_bytes=len(raw) if raw is not None else (len(text or "")),
         parser_provider=provider,
         parser_model=model,
+        branch_id=user_branch_id,
     )
 
     try:
@@ -108,28 +115,49 @@ async def upload_and_parse(
 
 
 @router.get("", response_model=list[DocumentRead])
-def list_documents(session: Session = Depends(get_session)) -> list[DocumentRead]:
-    docs = session.exec(select(Document).order_by(Document.created_at.desc())).all()
-    return [_to_read(d) for d in docs]
+def list_documents(
+    session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    _user: User = Depends(get_current_user),
+) -> list[DocumentRead]:
+    stmt = select(Document).order_by(Document.created_at.desc())
+    if user_branch_id is not None:
+        stmt = stmt.where(Document.branch_id == user_branch_id)
+    return [_to_read(d) for d in session.exec(stmt).all()]
 
 
 @router.get("/{document_id}", response_model=DocumentRead)
-def get_document(document_id: uuid.UUID, session: Session = Depends(get_session)) -> DocumentRead:
+def get_document(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    _user: User = Depends(get_current_user),
+) -> DocumentRead:
     doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, f"document {document_id} not found")
+    if user_branch_id is not None and doc.branch_id != user_branch_id:
+        raise HTTPException(403, "Access denied to this document")
     return _to_read(doc)
 
 
 @router.patch("/{document_id}", response_model=DocumentRead)
 def update_document_items(
-    document_id: uuid.UUID, payload: DocumentItemsUpdate, session: Session = Depends(get_session)
+    document_id: uuid.UUID,
+    payload: DocumentItemsUpdate,
+    session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    user: User = Depends(get_current_user),
 ) -> DocumentRead:
     doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, f"document {document_id} not found")
+    if user.role not in ("admin", "manager"):
+        raise HTTPException(403, "Only admin and manager can update documents")
     if doc.status == "confirmed":
         raise HTTPException(409, "document already confirmed, cannot edit")
+    if user_branch_id is not None and doc.branch_id != user_branch_id:
+        raise HTTPException(403, "Access denied to this document")
     doc.parsed_response = {"items": [i.model_dump(mode="json") for i in payload.items]}
     session.add(doc)
     session.commit()
@@ -142,13 +170,19 @@ def confirm_document(
     document_id: uuid.UUID,
     mode: Literal["replace", "merge"] = Query(default="merge"),
     session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    user: User = Depends(get_current_user),
 ) -> list[str]:
     """Commit a document's parsed items to the live menu. Returns committed ids."""
     doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, f"document {document_id} not found")
+    if user.role not in ("admin", "manager"):
+        raise HTTPException(403, "Only admin and manager can confirm documents")
     if doc.status == "confirmed":
         raise HTTPException(409, "document already confirmed")
+    if user_branch_id is not None and doc.branch_id != user_branch_id:
+        raise HTTPException(403, "Access denied to this document")
 
     items = [DraftMenuItem.model_validate(i) for i in doc.parsed_response.get("items", [])]
     if mode == "replace":
@@ -182,9 +216,18 @@ def confirm_document(
 
 
 @router.delete("/{document_id}", status_code=204)
-def delete_document(document_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+def delete_document(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    user: User = Depends(get_current_user),
+) -> None:
     doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, f"document {document_id} not found")
+    if user.role not in ("admin", "manager"):
+        raise HTTPException(403, "Only admin and manager can delete documents")
+    if user_branch_id is not None and doc.branch_id != user_branch_id:
+        raise HTTPException(403, "Access denied to this document")
     session.delete(doc)
     session.commit()

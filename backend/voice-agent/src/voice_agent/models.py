@@ -107,18 +107,15 @@ def build_vad(cfg: VADConfig) -> vad_lib.VAD | None:
 def build_turn_detection(cfg: TurnDetectionConfig):
     """Return a turn-detection model/string for AgentSession, or None.
 
-    "multilingual"/"english" load the LiveKit end-of-utterance model;
+    "multilingual"/"english" use the LiveKit cloud EOU model (requires
+    LIVEKIT_API_KEY/SECRET to be set — falls back to VAD if unreachable);
     "vad"/"stt" return the literal mode string the session understands;
     "none" disables turn detection.
     """
-    if cfg.mode == "multilingual":
-        from livekit.plugins.turn_detector.multilingual import MultilingualModel
+    if cfg.mode in ("multilingual", "english"):
+        from livekit.agents.inference import TurnDetector
 
-        return MultilingualModel()
-    if cfg.mode == "english":
-        from livekit.plugins.turn_detector.english import EnglishModel
-
-        return EnglishModel()
+        return TurnDetector()
     if cfg.mode in ("vad", "stt"):
         return cfg.mode
     return None

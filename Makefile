@@ -4,9 +4,30 @@ SERVER_DIR := backend/server
 AGENT_DIR  := backend/voice-agent
 CLIENT_DIR := client
 
-.PHONY: help install install-server install-agent install-client \
+SERVER_PORT := 8000
+CLIENT_PORT := 5173
+
+.PHONY: help kill-port kill-server kill-client \
+        install install-server install-agent install-client \
         server agent agent-console client \
         start start-all test
+
+kill-port: ## Kill processes listening on a given port (usage: make kill-port PORT=8000)
+	@pid=$$(lsof -ti :$(PORT) 2>/dev/null); \
+	if [ -n "$$pid" ]; then \
+		echo "killing process(es) on port $(PORT): $$pid"; \
+		kill $$pid 2>/dev/null; \
+		sleep 0.5; \
+		if kill -0 $$pid 2>/dev/null; then \
+			kill -9 $$pid 2>/dev/null; \
+		fi; \
+	fi
+
+kill-server: ## Kill any process on the server port ($(SERVER_PORT))
+	$(MAKE) kill-port PORT=$(SERVER_PORT)
+
+kill-client: ## Kill any process on the client port ($(CLIENT_PORT))
+	$(MAKE) kill-port PORT=$(CLIENT_PORT)
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -27,7 +48,7 @@ install-client: ## Install client (React) deps
 
 ## --- run individually ----------------------------------------------------
 
-server: ## Run the FastAPI admin server (http://localhost:8000)
+server: kill-server ## Run the FastAPI admin server (http://localhost:$(SERVER_PORT))
 	cd $(SERVER_DIR) && uv run server
 
 agent: ## Run the voice-agent worker (dev mode, connects to LiveKit)
@@ -36,7 +57,7 @@ agent: ## Run the voice-agent worker (dev mode, connects to LiveKit)
 agent-console: ## Run the voice-agent locally in console mode (mic/speaker)
 	cd $(AGENT_DIR) && uv run voice-agent console
 
-client: ## Run the React client dev server (http://localhost:5173)
+client: kill-client ## Run the React client dev server (http://localhost:$(CLIENT_PORT))
 	cd $(CLIENT_DIR) && npm run dev
 
 ## --- run together --------------------------------------------------------
