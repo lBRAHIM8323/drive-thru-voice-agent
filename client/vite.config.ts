@@ -12,6 +12,13 @@ export default defineConfig({
         target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/agent': {
+        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
+        changeOrigin: true,
+        bypass: (req) => {
+          if (req.url === '/agent') return '/index.html';
+        },
+      },
     },
   },
 })

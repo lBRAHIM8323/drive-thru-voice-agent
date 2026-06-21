@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
@@ -23,6 +26,19 @@ def slugify(name: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in name.strip().lower()).strip("_")
 
 
+def _offer_is_live(item: MenuItem) -> bool:
+    """A limited-time offer is live when a discounted price is set and the
+    ``offer_until`` deadline is either open-ended or still in the future."""
+    if item.offer_price is None:
+        return False
+    if item.offer_until is None:
+        return True
+    until = item.offer_until
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return until >= datetime.now(timezone.utc)
+
+
 def _to_read(item: MenuItem) -> MenuItemRead:
     return MenuItemRead(
         id=item.id,
@@ -36,6 +52,12 @@ def _to_read(item: MenuItem) -> MenuItemRead:
         price=item.price,
         currency=item.currency,
         branch_id=item.branch_id,
+        dietary=item.dietary,  # type: ignore[arg-type]
+        tags=item.tags or [],
+        serves=item.serves,
+        is_favorite=item.is_favorite,
+        offer_price=item.offer_price,
+        offer_until=item.offer_until,
         sizes=[SizeOption(size=s.size, price=s.price, calories=s.calories) for s in item.sizes],  # type: ignore[arg-type]
     )
 
@@ -49,17 +71,28 @@ def _apply_sizes(item: MenuItem, sizes: list[SizeOption]) -> None:
 @router.get("", response_model=list[MenuItemRead])
 def list_menu(
     category: ItemCategory | None = Query(default=None),
+    favorite: bool | None = Query(
+        default=None, description="Filter to admin-marked customer favourites."
+    ),
+    on_offer: bool | None = Query(
+        default=None, description="Filter to items with a currently-live limited-time offer."
+    ),
     session: Session = Depends(get_session),
     user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
 ) -> list[MenuItemRead]:
     stmt = select(MenuItem)
     if category:
         stmt = stmt.where(MenuItem.category == category)
+    if favorite is not None:
+        stmt = stmt.where(MenuItem.is_favorite == favorite)
     if user_branch_id is not None:
         stmt = stmt.where(
             (MenuItem.branch_id == user_branch_id) | (MenuItem.branch_id.is_(None))
         )
-    return [_to_read(i) for i in session.exec(stmt).all()]
+    items = session.exec(stmt).all()
+    if on_offer is not None:
+        items = [i for i in items if _offer_is_live(i) == on_offer]
+    return [_to_read(i) for i in items]
 
 
 @router.post("", response_model=MenuItemRead, status_code=201)
@@ -93,6 +126,12 @@ def create_menu_item(
         calories=payload.calories,
         price=payload.price,
         currency=payload.currency,
+        dietary=payload.dietary,
+        tags=payload.tags,
+        serves=payload.serves,
+        is_favorite=payload.is_favorite,
+        offer_price=payload.offer_price,
+        offer_until=payload.offer_until,
     )
     _apply_sizes(item, payload.sizes)
     session.add(item)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Divider, Group, Image, Paper, Stack, Text, Title } from '@mantine/core';
-import { IconBooks, IconToolsKitchen2 } from '@tabler/icons-react';
+import { IconBooks, IconStarFilled, IconToolsKitchen2 } from '@tabler/icons-react';
 import { useRoomContext } from '@livekit/components-react';
 
 import type { MenuItem, MenuPayload } from '../api/types';
@@ -13,9 +13,21 @@ function money(currency: string, amount: number) {
   }
 }
 
+function offerIsLive(item: MenuItem): boolean {
+  if (item.offer_price == null) return false;
+  if (!item.offer_until) return true;
+  return new Date(item.offer_until).getTime() >= Date.now();
+}
+
+const dietaryColor: Record<string, string> = { veg: 'green', non_veg: 'red', vegan: 'teal' };
+const dietaryLabel: Record<string, string> = { veg: 'Veg', non_veg: 'Non-veg', vegan: 'Vegan' };
+
 function priceLabel(item: MenuItem): string {
   if (item.sizes.length > 0) {
     return item.sizes.map((s) => `${s.size} ${money(item.currency, s.price)}`).join(' / ');
+  }
+  if (offerIsLive(item) && item.offer_price != null) {
+    return money(item.currency, item.offer_price);
   }
   if (item.price != null) {
     return money(item.currency, item.price);
@@ -90,12 +102,22 @@ export function MenuPanel() {
                   )}
                   <Stack gap={2} style={{ flex: 1 }}>
                     <Group justify="space-between" wrap="nowrap" gap="xs">
-                      <Text fw={500} size="sm" lineClamp={1}>
-                        {item.name}
-                      </Text>
-                      <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                        {priceLabel(item)}
-                      </Text>
+                      <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                        <Text fw={500} size="sm" lineClamp={1}>
+                          {item.name}
+                        </Text>
+                        {item.is_favorite && <IconStarFilled size={12} color="var(--mantine-color-yellow-6)" />}
+                      </Group>
+                      <Group gap={4} wrap="nowrap" style={{ whiteSpace: 'nowrap' }}>
+                        {offerIsLive(item) && item.price != null && item.offer_price != null && (
+                          <Text size="xs" c="dimmed" td="line-through">
+                            {money(item.currency, item.price)}
+                          </Text>
+                        )}
+                        <Text size="xs" c={offerIsLive(item) ? 'orange.6' : 'dimmed'} fw={offerIsLive(item) ? 600 : 400}>
+                          {priceLabel(item)}
+                        </Text>
+                      </Group>
                     </Group>
                     {item.description && (
                       <Text size="xs" c="dimmed" lineClamp={2}>
@@ -103,6 +125,26 @@ export function MenuPanel() {
                       </Text>
                     )}
                     <Group gap="xs">
+                      {item.dietary && (
+                        <Badge size="xs" variant="light" color={dietaryColor[item.dietary] ?? 'gray'}>
+                          {dietaryLabel[item.dietary] ?? item.dietary}
+                        </Badge>
+                      )}
+                      {offerIsLive(item) && (
+                        <Badge size="xs" color="orange">
+                          Offer
+                        </Badge>
+                      )}
+                      {item.serves != null && (
+                        <Badge size="xs" variant="light" color="grape">
+                          Serves {item.serves}
+                        </Badge>
+                      )}
+                      {(item.tags ?? []).map((t) => (
+                        <Badge key={t} size="xs" variant="outline" color="gray">
+                          {t.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
                       {item.calories != null && (
                         <Badge size="xs" variant="light" color="gray">
                           {item.calories} Cal

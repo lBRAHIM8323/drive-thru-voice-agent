@@ -6,7 +6,7 @@ between them. **Keep these models in sync** with the voice-agent. (Follow-up:
 extract into a shared package so this duplication goes away.)
 
 The server stores an ``AgentConfig`` payload as JSON and serves it verbatim at
-``GET /api/v1/agent-configs/{id}``, which the voice-agent validates with
+``GET /agent/agent-configs/{id}``, which the voice-agent validates with
 ``AgentConfig.model_validate(resp.json())``.
 """
 
@@ -101,11 +101,26 @@ class UIConfig(BaseModel):
     title: str | None = None  # heading shown to the customer
 
 
+class WakeWordConfig(BaseModel):
+    """Wakeword detection configuration.
+
+    The agent listens for these phrases on the customer's device before starting
+    a session. Multiple phrases can be active; the first one detected triggers
+    the connection.
+    """
+
+    enabled: bool = False
+    phrases: list[str] = Field(default_factory=list)
+    threshold: float = 0.5  # 0-1, lower = more sensitive (more false positives)
+    model_url: str = "https://raw.githubusercontent.com/livekit-examples/hello-wakeword/main/client/models/hey_livekit.onnx"
+
+
 class AgentConfig(BaseModel):
     """Full session configuration delivered to the voice-agent per session."""
 
     instructions: str = DEFAULT_INSTRUCTIONS
     greeting: str | None = None
+    wakewords: WakeWordConfig = Field(default_factory=WakeWordConfig)
 
     stt: STTConfig = Field(default_factory=STTConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)

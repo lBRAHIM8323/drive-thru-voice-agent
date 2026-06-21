@@ -2,6 +2,7 @@
 // (any string is allowed), these are just convenience presets in the UI.
 
 import type {
+  Dietary,
   LLMProvider,
   ParserProvider,
   STTProvider,
@@ -17,6 +18,22 @@ export const parserProviders: ParserProvider[] = ['openai', 'anthropic', 'google
 export const turnModes: TurnDetectionMode[] = ['multilingual', 'english', 'vad', 'stt', 'none'];
 export const visualizers: Visualizer[] = ['bar', 'grid', 'radial', 'wave', 'aura'];
 export const itemSizes = ['S', 'M', 'L', 'XL'] as const;
+
+export const dietaryOptions: { value: Dietary; label: string }[] = [
+  { value: 'veg', label: 'Vegetarian' },
+  { value: 'non_veg', label: 'Non-vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+];
+
+// Suggested dietary/allergen tags (the field is free-form, these are presets).
+export const suggestedTags = [
+  'lactose_free',
+  'gluten_free',
+  'nut_free',
+  'halal',
+  'spicy',
+  'low_calorie',
+] as const;
 
 export const suggestedLLMModels: Record<LLMProvider, string[]> = {
   openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],

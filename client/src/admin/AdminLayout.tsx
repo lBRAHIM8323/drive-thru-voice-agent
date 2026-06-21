@@ -26,14 +26,14 @@ import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../components/auth/AuthContext';
 
 const ALL_NAV = [
-  { to: '/admin', label: 'Dashboard', icon: IconLayoutDashboard, end: true, roles: ['admin', 'manager', 'staff'] },
-  { to: '/admin/menu', label: 'Menu', icon: IconToolsKitchen2, roles: ['admin', 'manager', 'staff'] },
-  { to: '/admin/listen', label: 'Listen in', icon: IconHeadphones, roles: ['admin', 'manager', 'staff'] },
-  { to: '/admin/documents', label: 'Documents', icon: IconFileUpload, roles: ['admin', 'manager'] },
-  { to: '/admin/agent-configs', label: 'Agent configs', icon: IconRobot, roles: ['admin', 'manager'] },
-  { to: '/admin/parser-config', label: 'Parser config', icon: IconSettings, roles: ['admin'] },
-  { to: '/admin/branches', label: 'Branches', icon: IconBuildingStore, roles: ['admin'] },
-  { to: '/admin/users', label: 'Users', icon: IconUsers, roles: ['admin'] },
+  { to: '/platform', label: 'Dashboard', icon: IconLayoutDashboard, end: true, roles: ['admin', 'manager', 'staff'] },
+  { to: '/platform/menu', label: 'Menu', icon: IconToolsKitchen2, roles: ['admin', 'manager', 'staff'] },
+  { to: '/platform/listen', label: 'Listen in', icon: IconHeadphones, roles: ['admin', 'manager', 'staff'] },
+  { to: '/platform/documents', label: 'Documents', icon: IconFileUpload, roles: ['admin', 'manager'] },
+  { to: '/platform/agent-configs', label: 'Agent configs', icon: IconRobot, roles: ['admin', 'manager'] },
+  { to: '/platform/parser-config', label: 'Parser config', icon: IconSettings, roles: ['admin'] },
+  { to: '/platform/branches', label: 'Branches', icon: IconBuildingStore, roles: ['admin'] },
+  { to: '/platform/users', label: 'Users', icon: IconUsers, roles: ['admin'] },
 ];
 
 export function AdminLayout() {

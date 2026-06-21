@@ -9,12 +9,13 @@ import {
   Select,
   Switch,
   Table,
+  TagsInput,
   Text,
   Textarea,
   TextInput,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconPlus, IconStar, IconTrash } from '@tabler/icons-react';
 
 import {
   useBranches,
@@ -22,13 +23,32 @@ import {
   useDeleteMenuItem,
   useMenu,
   useUpdateMenuItem,
+  type MenuFilters,
 } from '../../api/hooks';
-import type { ItemSize, MenuItem } from '../../api/types';
+import type { Dietary, ItemSize, MenuItem } from '../../api/types';
 import { AsyncState } from '../../components/AsyncState';
 import { PageHeader } from '../../components/PageHeader';
+import { TriStateSelect } from '../../components/TriStateSelect';
 import { confirmDelete } from '../../components/confirmDelete';
 import { notifyError, notifySuccess } from '../../lib/notify';
-import { itemSizes, selectData } from '../../lib/options';
+import { dietaryOptions, itemSizes, selectData, suggestedTags } from '../../lib/options';
+
+const dietaryLabel: Record<Dietary, string> = {
+  veg: 'Veg',
+  non_veg: 'Non-veg',
+  vegan: 'Vegan',
+};
+const dietaryColor: Record<Dietary, string> = {
+  veg: 'green',
+  non_veg: 'red',
+  vegan: 'teal',
+};
+
+function offerIsLive(item: MenuItem): boolean {
+  if (item.offer_price == null) return false;
+  if (!item.offer_until) return true;
+  return new Date(item.offer_until).getTime() >= Date.now();
+}
 
 type NumOrEmpty = number | '';
 
@@ -49,6 +69,12 @@ interface MenuFormValues {
   branch_id: string | null;
   price: NumOrEmpty;
   calories: NumOrEmpty;
+  dietary: string | null;
+  tags: string[];
+  serves: NumOrEmpty;
+  is_favorite: boolean;
+  offer_price: NumOrEmpty;
+  offer_until: string; // datetime-local string, e.g. "2026-06-30T18:00"
   sizes: SizeRow[];
 }
 
@@ -63,6 +89,12 @@ const emptyForm: MenuFormValues = {
   branch_id: null,
   price: '',
   calories: '',
+  dietary: null,
+  tags: [],
+  serves: '',
+  is_favorite: false,
+  offer_price: '',
+  offer_until: '',
   sizes: [],
 };
 
@@ -71,7 +103,14 @@ const sOrNull = (v: string) => (v.trim() ? v.trim() : null);
 
 export function MenuPage() {
   const [category, setCategory] = useState<string | null>(null);
-  const { data, isLoading, error } = useMenu(category ?? undefined);
+  const [favorite, setFavorite] = useState<boolean | null>(null);
+  const [onOffer, setOnOffer] = useState<boolean | null>(null);
+  const filters: MenuFilters = {
+    category: category ?? undefined,
+    favorite: favorite ?? undefined,
+    on_offer: onOffer ?? undefined,
+  };
+  const { data, isLoading, error } = useMenu(filters);
   const allItems = useMenu().data;
   const branches = useBranches();
   const createMut = useCreateMenuItem();
@@ -113,6 +152,13 @@ export function MenuPage() {
       branch_id: item.branch_id,
       price: item.price ?? '',
       calories: item.calories ?? '',
+      dietary: item.dietary,
+      tags: item.tags ?? [],
+      serves: item.serves ?? '',
+      is_favorite: item.is_favorite,
+      offer_price: item.offer_price ?? '',
+      // ISO → "YYYY-MM-DDTHH:mm" for the native datetime-local input.
+      offer_until: item.offer_until ? item.offer_until.slice(0, 16) : '',
       sizes: item.sizes.map((s) => ({
         size: s.size,
         price: s.price,
@@ -134,6 +180,12 @@ export function MenuPage() {
       branch_id: values.branch_id,
       price: values.sizes.length ? null : nOrNull(values.price),
       calories: values.sizes.length ? null : nOrNull(values.calories),
+      dietary: (values.dietary as Dietary | null) ?? null,
+      tags: values.tags,
+      serves: nOrNull(values.serves),
+      is_favorite: values.is_favorite,
+      offer_price: nOrNull(values.offer_price),
+      offer_until: values.offer_until ? new Date(values.offer_until).toISOString() : null,
       sizes: values.sizes.map((s) => ({
         size: s.size,
         price: Number(s.price || 0),
@@ -192,6 +244,16 @@ export function MenuPage() {
           onChange={setCategory}
           w={220}
         />
+        <TriStateSelect
+          label="Fav"
+          value={favorite}
+          onChange={setFavorite}
+        />
+        <TriStateSelect
+          label="Offer"
+          value={onOffer}
+          onChange={setOnOffer}
+        />
       </Group>
 
       <AsyncState isLoading={isLoading} error={error}>
@@ -201,6 +263,7 @@ export function MenuPage() {
               <Table.Tr>
                 <Table.Th>Name</Table.Th>
                 <Table.Th>Category</Table.Th>
+                <Table.Th>Dietary</Table.Th>
                 <Table.Th>Price</Table.Th>
                 <Table.Th>Available</Table.Th>
                 <Table.Th w={100} />
@@ -210,16 +273,59 @@ export function MenuPage() {
               {data?.map((item) => (
                 <Table.Tr key={item.id}>
                   <Table.Td>
-                    <Text fw={500}>{item.name}</Text>
+                    <Group gap={6} wrap="nowrap">
+                      <Text fw={500}>{item.name}</Text>
+                      {item.is_favorite && (
+                        <IconStar size={14} fill="var(--mantine-color-yellow-5)" color="var(--mantine-color-yellow-6)" />
+                      )}
+                      {offerIsLive(item) && (
+                        <Badge size="xs" color="orange" variant="light">
+                          offer
+                        </Badge>
+                      )}
+                    </Group>
                     <Text size="xs" c="dimmed">
                       {item.id}
+                      {item.serves != null ? ` · serves ${item.serves}` : ''}
                     </Text>
                   </Table.Td>
                   <Table.Td>
                     <Badge variant="light">{item.category}</Badge>
                   </Table.Td>
                   <Table.Td>
-                    {item.currency} {priceLabel(item)}
+                    <Group gap={4}>
+                      {item.dietary && (
+                        <Badge size="xs" variant="light" color={dietaryColor[item.dietary]}>
+                          {dietaryLabel[item.dietary]}
+                        </Badge>
+                      )}
+                      {(item.tags ?? []).map((t) => (
+                        <Badge key={t} size="xs" variant="outline" color="gray">
+                          {t.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
+                      {!item.dietary && (item.tags ?? []).length === 0 && (
+                        <Text size="xs" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    {offerIsLive(item) && item.offer_price != null ? (
+                      <Group gap={6} wrap="nowrap">
+                        <Text c="orange.7" fw={500}>
+                          {item.currency} {item.offer_price}
+                        </Text>
+                        <Text size="xs" c="dimmed" td="line-through">
+                          {priceLabel(item)}
+                        </Text>
+                      </Group>
+                    ) : (
+                      <>
+                        {item.currency} {priceLabel(item)}
+                      </>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Badge color={item.available ? 'green' : 'gray'} variant="light">
@@ -240,7 +346,7 @@ export function MenuPage() {
               ))}
               {data?.length === 0 && (
                 <Table.Tr>
-                  <Table.Td colSpan={5} ta="center" c="dimmed">
+                  <Table.Td colSpan={6} ta="center" c="dimmed">
                     No items{category ? ' in this category' : ''} yet.
                   </Table.Td>
                 </Table.Tr>
@@ -296,6 +402,57 @@ export function MenuPage() {
               <NumberInput label="Calories" {...form.getInputProps('calories')} />
             </Group>
           )}
+
+          <Group grow mt="sm">
+            <Select
+              label="Dietary"
+              placeholder="Not specified"
+              clearable
+              data={dietaryOptions}
+              {...form.getInputProps('dietary')}
+            />
+            <NumberInput
+              label="Serves"
+              description="People a meal feeds"
+              min={1}
+              {...form.getInputProps('serves')}
+            />
+          </Group>
+
+          <TagsInput
+            label="Dietary tags"
+            description="e.g. lactose_free, gluten_free, halal. Press Enter to add."
+            mt="sm"
+            data={[...suggestedTags]}
+            clearable
+            {...form.getInputProps('tags')}
+          />
+
+          <Text fw={500} size="sm" mt="lg" mb="xs">
+            Limited-time offer
+          </Text>
+          <Group grow>
+            <NumberInput
+              label="Offer price"
+              description="Discounted price while the offer runs"
+              min={0}
+              decimalScale={2}
+              {...form.getInputProps('offer_price')}
+            />
+            <TextInput
+              label="Offer valid until"
+              type="datetime-local"
+              description="Leave blank for no end date"
+              {...form.getInputProps('offer_until')}
+            />
+          </Group>
+
+          <Switch
+            label="Customer favourite"
+            description="Surfaced by the agent for upsell suggestions"
+            mt="md"
+            {...form.getInputProps('is_favorite', { type: 'checkbox' })}
+          />
 
           <Group justify="space-between" mt="lg" mb="xs">
             <Text fw={500} size="sm">

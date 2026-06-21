@@ -24,7 +24,7 @@ export function LoginPage() {
   const loginMutation = useLogin();
 
   if (isAuthenticated) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/platform" replace />;
   }
 
   async function handleSubmit(e: React.FormEvent) {

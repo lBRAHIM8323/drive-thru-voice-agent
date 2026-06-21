@@ -39,7 +39,7 @@ def require_provider_key(provider: str) -> None:
     if keys and not any(os.getenv(k) for k in keys):
         raise MissingProviderKey(
             f"{' or '.join(keys)} is not set. Set it in the server environment, "
-            f"or switch the parser provider via PUT /api/v1/parser-config."
+            f"or switch the parser provider via PUT /agent/parser-config."
         )
 
 

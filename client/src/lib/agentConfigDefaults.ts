@@ -7,6 +7,13 @@ export function defaultAgentConfig(): AgentConfig {
     instructions:
       'You are a friendly drive-thru attendant. Keep replies short and natural.',
     greeting: null,
+    wakewords: {
+      enabled: false,
+      phrases: [],
+      threshold: 0.5,
+      model_url:
+        'https://raw.githubusercontent.com/livekit-examples/hello-wakeword/main/client/models/hey_livekit.onnx',
+    },
     stt: {
       provider: 'deepgram',
       model: 'nova-3',

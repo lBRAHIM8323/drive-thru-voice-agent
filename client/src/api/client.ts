@@ -1,7 +1,7 @@
 // Thin typed fetch wrapper around the FastAPI server.
 // In dev, requests go to `/api/...` and Vite proxies them to the server.
 
-export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+export const API_BASE = import.meta.env.VITE_API_BASE ?? '/agent';
 
 const TOKEN_KEY = 'drivethru_token';
 let _onUnauthorized: (() => void) | null = null;

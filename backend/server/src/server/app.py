@@ -11,7 +11,7 @@ from .db import init_db
 from .routers import agent_configs, auth, branches, connection, documents, menu, parser_config, sessions, users
 from .settings import get_settings
 
-API_PREFIX = "/api/v1"
+API_PREFIX = "/agent"
 
 
 @asynccontextmanager

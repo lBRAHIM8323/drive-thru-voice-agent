@@ -5,7 +5,7 @@ Resolution order (first match wins):
 1. ``{"config": {...}}`` in the job/room metadata — an inline config, mostly for
    testing and local dispatch.
 2. ``{"config_id": "..."}`` in the metadata — fetched from ``backend/server`` at
-   ``GET {SERVER_URL}/api/v1/agent-configs/{config_id}``.
+   ``GET {SERVER_URL}/agent/agent-configs/{config_id}``.
 3. Anything missing or failing falls back to :meth:`AgentConfig.default`, so the
    agent always starts (useful before the server exists).
 """
@@ -23,7 +23,7 @@ from .config import AgentConfig
 
 logger = logging.getLogger("drive-thru.config")
 
-CONFIG_PATH = "/api/v1/agent-configs/{config_id}"
+CONFIG_PATH = "/agent/agent-configs/{config_id}"
 _FETCH_TIMEOUT = 10.0
 
 

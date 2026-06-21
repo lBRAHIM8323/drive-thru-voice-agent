@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import AgentConfigRecord, Session as SessionRecord
-from ..schemas.agent_config import UIConfig
+from ..schemas.agent_config import UIConfig, WakeWordConfig
 from ..settings import get_settings
 
 router = APIRouter(prefix="/connection", tags=["connection"])
@@ -35,6 +35,7 @@ class ConnectionInfo(BaseModel):
     identity: str
     config_id: str
     ui: UIConfig
+    wakewords: WakeWordConfig | None = None
 
 
 def _client_ws_url(url: str) -> str:
@@ -60,6 +61,30 @@ def _resolve_config(session: Session, config_id: str | None) -> AgentConfigRecor
     if not rec:
         raise HTTPException(409, "no active agent config; activate one in the admin panel")
     return rec
+
+
+class ConnectionConfig(BaseModel):
+    """Lightweight config preview — no session/token created."""
+    ui: UIConfig
+    wakewords: WakeWordConfig | None = None
+
+
+@router.get("/config", response_model=ConnectionConfig)
+def get_connection_config(
+    session: Session = Depends(get_session),
+) -> ConnectionConfig:
+    """Return the UI and wakeword config from the active agent config without
+    creating a session or minting a LiveKit token. Used by the customer page to
+    decide whether to show wakeword listening UI."""
+    rec = _resolve_config(session, None)
+    ui = UIConfig.model_validate((rec.config or {}).get("ui") or {})
+    wakewords = WakeWordConfig.model_validate(
+        (rec.config or {}).get("wakewords") or {}
+    )
+    return ConnectionConfig(
+        ui=ui,
+        wakewords=wakewords if wakewords.enabled and wakewords.phrases else None,
+    )
 
 
 @router.post("", response_model=ConnectionInfo)
@@ -106,6 +131,10 @@ async def create_connection(
     session.add(db_session_obj)
     session.commit()
 
+    wakewords = WakeWordConfig.model_validate(
+        (rec.config or {}).get("wakewords") or {}
+    )
+
     return ConnectionInfo(
         server_url=_client_ws_url(settings.livekit_url),
         token=token,
@@ -113,4 +142,5 @@ async def create_connection(
         identity=identity,
         config_id=rec.id,
         ui=ui,
+        wakewords=wakewords if wakewords.enabled and wakewords.phrases else None,
     )

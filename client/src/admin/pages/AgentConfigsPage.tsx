@@ -53,7 +53,7 @@ export function AgentConfigsPage() {
         actions={
           <Button
             leftSection={<IconPlus size={16} />}
-            onClick={() => navigate('/admin/agent-configs/new')}
+            onClick={() => navigate('/platform/agent-configs/new')}
           >
             New config
           </Button>
@@ -91,7 +91,7 @@ export function AgentConfigsPage() {
                     <Group gap={4} justify="flex-end">
                       <ActionIcon
                         variant="subtle"
-                        onClick={() => navigate(`/admin/agent-configs/${c.id}`)}
+                        onClick={() => navigate(`/platform/agent-configs/${c.id}`)}
                       >
                         <IconEdit size={16} />
                       </ActionIcon>

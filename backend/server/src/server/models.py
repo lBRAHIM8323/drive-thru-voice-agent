@@ -110,6 +110,22 @@ class MenuItem(SQLModel, table=True):
     # Base price for non-size-selectable items; size rows hold per-size pricing.
     price: float | None = _money()
     currency: str = "USD"
+    # Dietary classification (veg | non_veg | vegan) and free-form dietary tags
+    # (e.g. "lactose_free", "gluten_free", "halal", "spicy"). Surfaced to the
+    # voice agent and customer menu so dietary questions can be answered.
+    dietary: str | None = None
+    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # How many people a meal/platter feeds (null for single-serve items).
+    serves: int | None = None
+    # Admin-marked "customer favourite" — used for greeting upsell suggestions.
+    is_favorite: bool = False
+    # Limited-time offer: discounted price effective until ``offer_until``.
+    # Both must be set for the offer to apply; the agent uses ``offer_price`` as
+    # the order price while the offer is live.
+    offer_price: float | None = _money()
+    offer_until: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     created_at: datetime | None = _created_at()
     updated_at: datetime | None = _updated_at()
 

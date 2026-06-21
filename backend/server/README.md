@@ -23,7 +23,7 @@ default branch, the singleton parser config, and — if `ADMIN_USERNAME` /
 `agent_configs`, `parser_config`, `sessions`, `orders` + `order_items`.
 Money is `Numeric(12,2)`; enum-like fields are validated at the schema layer.
 
-## API (`/api/v1`)
+## API (`/agent`)
 
 - **Branches** — `GET/POST /branches`, `GET/PATCH/DELETE /branches/{id}`
 - **Menu** — `GET/POST /menu`, `GET/PATCH/DELETE /menu/{id}` (per-size pricing)

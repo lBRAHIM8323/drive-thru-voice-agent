@@ -79,9 +79,15 @@ export function useDeleteUser() {
 
 // --- query keys ------------------------------------------------------------
 
+export interface MenuFilters {
+  category?: string;
+  favorite?: boolean;
+  on_offer?: boolean;
+}
+
 export const qk = {
   branches: ['branches'] as const,
-  menu: (category?: string) => ['menu', category ?? 'all'] as const,
+  menu: (filters?: MenuFilters) => ['menu', filters ?? {}] as const,
   documents: ['documents'] as const,
   document: (id: UUID) => ['documents', id] as const,
   agentConfigs: ['agent-configs'] as const,
@@ -122,11 +128,19 @@ export function useDeleteBranch() {
 
 // --- menu -----------------------------------------------------------------
 
-export function useMenu(category?: string) {
+function buildQuery(filters?: MenuFilters): string {
+  if (!filters) return '';
+  const parts: string[] = [];
+  if (filters.category) parts.push(`category=${encodeURIComponent(filters.category)}`);
+  if (filters.favorite != null) parts.push(`favorite=${filters.favorite}`);
+  if (filters.on_offer != null) parts.push(`on_offer=${filters.on_offer}`);
+  return parts.length ? `?${parts.join('&')}` : '';
+}
+
+export function useMenu(filters?: MenuFilters) {
   return useQuery({
-    queryKey: qk.menu(category),
-    queryFn: () =>
-      api.get<MenuItem[]>(`/menu${category ? `?category=${encodeURIComponent(category)}` : ''}`),
+    queryKey: qk.menu(filters),
+    queryFn: () => api.get<MenuItem[]>(`/menu${buildQuery(filters)}`),
   });
 }
 

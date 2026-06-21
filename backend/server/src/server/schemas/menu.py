@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -11,6 +12,9 @@ from pydantic import BaseModel, Field
 # "tea", "burgers", "drinks"). Not constrained to any one franchise's taxonomy.
 ItemCategory = str
 ItemSize = Literal["S", "M", "L", "XL"]
+# Veg/non-veg classification. Free-form-ish but constrained to the common set so
+# the agent and UI can render a consistent badge.
+Dietary = Literal["veg", "non_veg", "vegan"]
 ParserProvider = Literal["openai", "anthropic", "google"]
 
 
@@ -31,6 +35,16 @@ class MenuItemBase(BaseModel):
     price: float | None = None
     currency: str = "USD"
     branch_id: uuid.UUID | None = None
+    # Dietary classification + free-form tags (e.g. "lactose_free", "gluten_free").
+    dietary: Dietary | None = None
+    tags: list[str] = Field(default_factory=list)
+    # Number of people a meal feeds (null for single-serve items).
+    serves: int | None = None
+    # Admin-marked customer favourite (used for greeting upsell).
+    is_favorite: bool = False
+    # Limited-time offer: discounted price valid until ``offer_until``.
+    offer_price: float | None = None
+    offer_until: datetime | None = None
     sizes: list[SizeOption] = Field(default_factory=list)
 
 
@@ -50,6 +64,12 @@ class MenuItemUpdate(BaseModel):
     price: float | None = None
     currency: str | None = None
     branch_id: uuid.UUID | None = None
+    dietary: Dietary | None = None
+    tags: list[str] | None = None
+    serves: int | None = None
+    is_favorite: bool | None = None
+    offer_price: float | None = None
+    offer_until: datetime | None = None
     sizes: list[SizeOption] | None = None
 
 

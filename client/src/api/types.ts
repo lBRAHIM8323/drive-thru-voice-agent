@@ -11,6 +11,7 @@ export type TTSProvider = 'cartesia' | 'elevenlabs';
 export type TurnDetectionMode = 'multilingual' | 'english' | 'vad' | 'stt' | 'none';
 export type ParserProvider = 'openai' | 'anthropic' | 'google';
 export type ItemSize = 'S' | 'M' | 'L' | 'XL';
+export type Dietary = 'veg' | 'non_veg' | 'vegan';
 export type DocumentStatus = 'uploaded' | 'parsing' | 'parsed' | 'failed' | 'confirmed';
 
 // --- agent config ---------------------------------------------------------
@@ -72,9 +73,17 @@ export interface UIConfig {
   title: string | null;
 }
 
+export interface WakeWordConfig {
+  enabled: boolean;
+  phrases: string[];
+  threshold: number;
+  model_url: string;
+}
+
 export interface AgentConfig {
   instructions: string;
   greeting: string | null;
+  wakewords: WakeWordConfig;
   stt: STTConfig;
   llm: LLMConfig;
   tts: TTSConfig;
@@ -129,6 +138,12 @@ export interface MenuItem {
   price: number | null;
   currency: string;
   branch_id: UUID | null;
+  dietary: Dietary | null;
+  tags: string[];
+  serves: number | null;
+  is_favorite: boolean;
+  offer_price: number | null;
+  offer_until: string | null; // ISO timestamp
   sizes: SizeOption[];
 }
 
@@ -204,6 +219,7 @@ export interface ConnectionInfo {
   identity: string;
   config_id: string;
   ui: UIConfig;
+  wakewords: WakeWordConfig | null;
 }
 
 // --- auth ------------------------------------------------------------------

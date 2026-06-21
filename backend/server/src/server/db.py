@@ -85,6 +85,22 @@ def _migrate(session: Session) -> None:
         )
         logger.info("migrated users: added branch_id column")
 
+    # v0.3.0 — dietary info, favourites, serving size and limited-time offers
+    # on ``menu_items``.
+    menu_cols = {c["name"] for c in inspector.get_columns("menu_items")}
+    menu_additions = {
+        "dietary": "VARCHAR",
+        "tags": "JSON DEFAULT '[]'::json",
+        "serves": "INTEGER",
+        "is_favorite": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "offer_price": "NUMERIC(12, 2)",
+        "offer_until": "TIMESTAMPTZ",
+    }
+    for name, ddl in menu_additions.items():
+        if name not in menu_cols:
+            conn.execute(sa.text(f"ALTER TABLE menu_items ADD COLUMN {name} {ddl}"))
+            logger.info("migrated menu_items: added %s column", name)
+
 
 def _seed(session: Session) -> None:
     # Singleton parser config.

@@ -10,6 +10,7 @@ import {
   Switch,
   TagsInput,
   Tabs,
+  Text,
   Textarea,
   TextInput,
 } from '@mantine/core';
@@ -101,7 +102,7 @@ export function AgentConfigEditPage() {
         });
         notifySuccess('Config created');
       }
-      navigate('/admin/agent-configs');
+      navigate('/platform/agent-configs');
     } catch (e) {
       notifyError(e);
     }
@@ -117,7 +118,7 @@ export function AgentConfigEditPage() {
         description="STT, LLM, TTS, prompt and behavior for a drive-thru session."
         actions={
           <Group>
-            <Button variant="default" onClick={() => navigate('/admin/agent-configs')}>
+            <Button variant="default" onClick={() => navigate('/platform/agent-configs')}>
               Back
             </Button>
             <Button
@@ -359,6 +360,42 @@ export function AgentConfigEditPage() {
                   w={240}
                   {...form.getInputProps('config.background_audio.volume')}
                 />
+
+                <Text fw={500} size="sm" mt="lg" mb="xs">
+                  Wake word detection
+                </Text>
+                <Text size="xs" c="dimmed" mb="xs">
+                  The customer's browser listens for a spoken trigger phrase before
+                  connecting to the voice agent. The ONNX model runs entirely on-device.
+                </Text>
+                <Switch
+                  label="Enable wake word detection"
+                  description="If off, the customer taps a button to start."
+                  {...form.getInputProps('config.wakewords.enabled', { type: 'checkbox' })}
+                />
+                <Group grow>
+                  <TagsInput
+                    label="Trigger phrases"
+                    description="e.g. hey_livekit, hey_robot. Press Enter."
+                    placeholder="Add a phrase…"
+                    data={[]}
+                    {...form.getInputProps('config.wakewords.phrases')}
+                  />
+                  <NumberInput
+                    label="Threshold"
+                    description="0–1. Lower = more sensitive."
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    decimalScale={2}
+                    {...form.getInputProps('config.wakewords.threshold')}
+                  />
+                </Group>
+                <TextInput
+                  label="Model URL"
+                  description="ONNX model for detection (pre-trained or custom)."
+                  {...form.getInputProps('config.wakewords.model_url')}
+                />
               </Stack>
             </Tabs.Panel>
 
@@ -391,7 +428,7 @@ export function AgentConfigEditPage() {
           </Tabs>
 
           <Group justify="flex-end" mt="xl" maw={720}>
-            <Button variant="default" onClick={() => navigate('/admin/agent-configs')}>
+            <Button variant="default" onClick={() => navigate('/platform/agent-configs')}>
               Cancel
             </Button>
             <Button type="submit" loading={createMut.isPending || updateMut.isPending}>

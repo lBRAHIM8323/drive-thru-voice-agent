@@ -29,14 +29,14 @@ export function DashboardPage() {
     <>
       <PageHeader title="Dashboard" description="Overview of your drive-thru configuration." />
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-        <StatCard label="Menu items" value={dash(menu.data?.length)} to="/admin/menu" />
-        <StatCard label="Documents" value={dash(docs.data?.length)} to="/admin/documents" />
+        <StatCard label="Menu items" value={dash(menu.data?.length)} to="/platform/menu" />
+        <StatCard label="Documents" value={dash(docs.data?.length)} to="/platform/documents" />
         <StatCard
           label="Agent configs"
           value={dash(configs.data?.length)}
-          to="/admin/agent-configs"
+          to="/platform/agent-configs"
         />
-        <StatCard label="Branches" value={dash(branches.data?.length)} to="/admin/branches" />
+        <StatCard label="Branches" value={dash(branches.data?.length)} to="/platform/branches" />
       </SimpleGrid>
     </>
   );

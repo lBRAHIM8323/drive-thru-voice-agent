@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlmodel import Session as DbSession, select
 
 from ..db import get_session
@@ -14,6 +15,20 @@ from ..models import Order, OrderItem, Session, User
 from ..schemas.session import OrderItemRead, OrderRead, SessionRead
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+class HandoffNote(BaseModel):
+    text: str
+    at: str | None = None
+
+
+class HandoffEpisodeIn(BaseModel):
+    """A recorded human-takeover episode: why it happened and what was said while
+    the human handled the customer (the agent observes and notes this so the
+    resolution can be reviewed and learned from)."""
+
+    reason: str | None = None
+    notes: list[HandoffNote] = Field(default_factory=list)
 
 
 def _build_session_read(session: Session) -> SessionRead:
@@ -102,3 +117,36 @@ def complete_session_by_room(
     session.add(sess)
     session.commit()
     return {"status": "completed", "session_id": str(sess.id)}
+
+
+@router.post("/by-room/{room_name}/handoff-notes")
+def add_handoff_notes(
+    room_name: str,
+    payload: HandoffEpisodeIn,
+    session: DbSession = Depends(get_session),
+    _verified: None = Depends(verify_agent_api_key),
+) -> dict[str, object]:
+    """Append a human-handoff episode (reason + observed notes) to the session.
+
+    Stored under ``transcript['handoff_episodes']`` so managers can review what a
+    human did when the agent handed off — the seed of a learning loop.
+    """
+    sess = session.exec(select(Session).where(Session.room_name == room_name)).first()
+    if not sess:
+        raise HTTPException(404, f"session with room {room_name!r} not found")
+
+    # JSON column: build a fresh dict so SQLAlchemy detects the change.
+    transcript = dict(sess.transcript or {})
+    episodes = list(transcript.get("handoff_episodes", []))
+    episodes.append(
+        {
+            "reason": payload.reason,
+            "notes": [n.model_dump() for n in payload.notes],
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    transcript["handoff_episodes"] = episodes
+    sess.transcript = transcript
+    session.add(sess)
+    session.commit()
+    return {"status": "ok", "episodes": len(episodes)}

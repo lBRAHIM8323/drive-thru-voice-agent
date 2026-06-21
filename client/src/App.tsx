@@ -20,10 +20,11 @@ export function App() {
     <AuthProvider>
       <Routes>
         <Route path="/" element={<CustomerPage />} />
-        <Route path="/admin/login" element={<LoginPage />} />
+        <Route path="/agent" element={<CustomerPage />} />
+        <Route path="/platform/login" element={<LoginPage />} />
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/platform" element={<AdminLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="menu" element={<MenuPage />} />
             <Route path="documents" element={<DocumentsPage />} />
