@@ -229,7 +229,7 @@ def test_agent_config_contract(client, auth):
     assert cfg.status_code == 200
     body = cfg.json()
     assert set(body) == {
-        "instructions", "greeting", "stt", "llm", "tts",
+        "instructions", "greeting", "wakewords", "stt", "llm", "tts",
         "vad", "turn_detection", "session", "background_audio", "ui",
     }
     assert body["llm"]["provider"] == "anthropic"

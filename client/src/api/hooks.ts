@@ -169,6 +169,18 @@ export function useDeleteMenuItem() {
   });
 }
 
+export function useUploadMenuItemImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.postForm<MenuItem>(`/menu/${id}/image`, form);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu'] }),
+  });
+}
+
 // --- documents ------------------------------------------------------------
 
 export function useDocuments() {

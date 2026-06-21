@@ -1,15 +1,19 @@
-"""Menu item CRUD (with normalized per-size pricing)."""
+"""Menu item CRUD (with normalized per-size pricing + R2 image upload)."""
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import boto3
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlmodel import Session, select
 
+logger = logging.getLogger(__name__)
+
 from ..db import get_session
-from ..deps import get_current_user, require_branch_resource, require_role
+from ..deps import get_current_user, require_branch_resource
 from ..models import MenuItem, MenuItemSize, User
 from ..schemas.menu import (
     ItemCategory,
@@ -18,8 +22,20 @@ from ..schemas.menu import (
     MenuItemUpdate,
     SizeOption,
 )
+from ..settings import get_settings
 
 router = APIRouter(prefix="/menu", tags=["menu"])
+
+
+def _r2_client():
+    s = get_settings()
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{s.r2_account_id}.r2.cloudflarestorage.com",
+        aws_access_key_id=s.r2_access_key,
+        aws_secret_access_key=s.r2_secret_key,
+        region_name="auto",
+    )
 
 
 def slugify(name: str) -> str:
@@ -27,8 +43,6 @@ def slugify(name: str) -> str:
 
 
 def _offer_is_live(item: MenuItem) -> bool:
-    """A limited-time offer is live when a discounted price is set and the
-    ``offer_until`` deadline is either open-ended or still in the future."""
     if item.offer_price is None:
         return False
     if item.offer_until is None:
@@ -200,3 +214,46 @@ def delete_menu_item(
             raise HTTPException(403, "Access denied to this menu item")
     session.delete(item)
     session.commit()
+
+
+@router.post("/{item_id}/image", response_model=MenuItemRead)
+def upload_item_image(
+    item_id: str,
+    file: UploadFile,
+    session: Session = Depends(get_session),
+    user_branch_id: uuid.UUID | None = Depends(require_branch_resource),
+    user: User = Depends(get_current_user),
+) -> MenuItemRead:
+    """Upload an image file for a menu item, store it in Cloudflare R2, and set ``image_url``."""
+    item = session.get(MenuItem, item_id)
+    if not item:
+        raise HTTPException(404, f"menu item {item_id!r} not found")
+    if user.role != "admin":
+        if user_branch_id is None or item.branch_id != user_branch_id:
+            raise HTTPException(403, "Access denied to this menu item")
+
+    s = get_settings()
+    if not all([s.r2_account_id, s.r2_access_key, s.r2_secret_key, s.r2_bucket_name]):
+        raise HTTPException(500, "Cloudflare R2 is not configured")
+
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename else "jpg"
+    key = f"menu/{item_id}/{uuid.uuid4().hex}.{ext}"
+
+    body = file.file.read()
+    if len(body) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Image exceeds 5 MB limit")
+
+    client = _r2_client()
+    client.put_object(
+        Bucket=s.r2_bucket_name,
+        Key=key,
+        Body=body,
+        ContentType=file.content_type or "image/jpeg",
+    )
+
+    public_url = f"{s.r2_public_base_url.rstrip('/')}/{key}"
+    item.image_url = public_url
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return _to_read(item)

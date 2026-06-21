@@ -66,6 +66,27 @@ class Settings:
     def google_api_key(self) -> str | None:
         return os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
+    # Cloudflare R2 — image uploads
+    @property
+    def r2_public_base_url(self) -> str | None:
+        return os.getenv("CLOUDFLARE_R2_PUBLIC_BASE_URL")
+
+    @property
+    def r2_account_id(self) -> str | None:
+        return os.getenv("CLOUDFLARE_ACCOUNT_ID")
+
+    @property
+    def r2_access_key(self) -> str | None:
+        return os.getenv("CLOUDFLARE_ACCESS_KEY")
+
+    @property
+    def r2_secret_key(self) -> str | None:
+        return os.getenv("CLOUDFLARE_SECRET_KEY")
+
+    @property
+    def r2_bucket_name(self) -> str | None:
+        return os.getenv("CLOUDFLARE_BUCKET_NAME")
+
     # LiveKit — used to mint connection tokens for the customer-facing page.
     @property
     def livekit_url(self) -> str | None:

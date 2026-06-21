@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Badge,
   Button,
+  FileInput,
   Group,
   Modal,
   NumberInput,
@@ -23,6 +24,7 @@ import {
   useDeleteMenuItem,
   useMenu,
   useUpdateMenuItem,
+  useUploadMenuItemImage,
   type MenuFilters,
 } from '../../api/hooks';
 import type { Dietary, ItemSize, MenuItem } from '../../api/types';
@@ -65,6 +67,7 @@ interface MenuFormValues {
   description: string;
   available: boolean;
   voice_alias: string;
+  imageFile: File | null;
   currency: string;
   branch_id: string | null;
   price: NumOrEmpty;
@@ -85,6 +88,7 @@ const emptyForm: MenuFormValues = {
   description: '',
   available: true,
   voice_alias: '',
+  imageFile: null,
   currency: 'USD',
   branch_id: null,
   price: '',
@@ -148,6 +152,7 @@ export function MenuPage() {
       description: item.description ?? '',
       available: item.available,
       voice_alias: item.voice_alias ?? '',
+      imageFile: null,
       currency: item.currency,
       branch_id: item.branch_id,
       price: item.price ?? '',
@@ -157,7 +162,6 @@ export function MenuPage() {
       serves: item.serves ?? '',
       is_favorite: item.is_favorite,
       offer_price: item.offer_price ?? '',
-      // ISO → "YYYY-MM-DDTHH:mm" for the native datetime-local input.
       offer_until: item.offer_until ? item.offer_until.slice(0, 16) : '',
       sizes: item.sizes.map((s) => ({
         size: s.size,
@@ -168,6 +172,8 @@ export function MenuPage() {
     setOpened(true);
   }
 
+  const uploadMut = useUploadMenuItemImage();
+
   async function submit(values: MenuFormValues) {
     const payload = {
       name: values.name.trim(),
@@ -175,7 +181,6 @@ export function MenuPage() {
       description: sOrNull(values.description),
       available: values.available,
       voice_alias: sOrNull(values.voice_alias),
-      image_url: null,
       currency: values.currency.trim() || 'USD',
       branch_id: values.branch_id,
       price: values.sizes.length ? null : nOrNull(values.price),
@@ -193,12 +198,17 @@ export function MenuPage() {
       })),
     };
     try {
+      let item: MenuItem;
       if (editing) {
-        await updateMut.mutateAsync({ id: editing.id, body: payload });
+        item = await updateMut.mutateAsync({ id: editing.id, body: payload });
         notifySuccess('Item updated');
       } else {
-        await createMut.mutateAsync({ ...payload, id: sOrNull(values.id) });
+        item = await createMut.mutateAsync({ ...payload, id: sOrNull(values.id) });
         notifySuccess('Item created');
+      }
+      if (values.imageFile) {
+        await uploadMut.mutateAsync({ id: item.id, file: values.imageFile });
+        notifySuccess('Image uploaded');
       }
       setOpened(false);
     } catch (e) {
@@ -395,6 +405,20 @@ export function MenuPage() {
               {...form.getInputProps('branch_id')}
             />
           </Group>
+
+          <FileInput
+            label="Image"
+            description="Upload a food photo. It will be stored in Cloudflare R2."
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            clearable
+            mt="sm"
+            {...form.getInputProps('imageFile')}
+          />
+          {editing && editing.image_url && !form.values.imageFile && (
+            <Text size="xs" c="dimmed" mt={4}>
+              Current: {editing.image_url}
+            </Text>
+          )}
 
           {form.values.sizes.length === 0 && (
             <Group grow mt="sm">
